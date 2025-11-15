@@ -2916,3 +2916,53 @@ compression_dictionary_training_auto_train_enabled: false
 # Value of 100 means 1% of writes are sampled. Lower values reduce overhead but may
 # result in less representative sample data for dictionary training.
 compression_dictionary_training_sampling_rate: 0.01
+
+# Enhanced CQL Features Configuration (RFC-0008)
+# Configuration for Common Table Expressions, Window Functions, Recursive Queries, and Enhanced Aggregations
+
+# Enable/disable enhanced CQL features
+enhanced_cql:
+  # Enable Common Table Expressions (WITH clause)
+  enable_cte: true
+  
+  # Enable window functions (OVER clause)
+  enable_window_functions: true
+  
+  # Enable recursive queries (WITH RECURSIVE)
+  # Disabled by default due to potential performance impact
+  enable_recursive: false
+  
+  # Enable enhanced aggregate functions
+  enable_enhanced_aggregates: true
+  
+  # CTE memory limits
+  # Maximum memory in MB for CTE materialization
+  cte_max_memory_mb: 256
+  
+  # Enable spilling CTE results to disk when memory limit is reached
+  cte_spill_to_disk: true
+  
+  # Temporary directory for CTE spill files
+  # cte_temp_directory: /var/cassandra/temp
+  
+  # Window function limits
+  # Maximum number of rows in a window partition
+  window_max_partition_size: 100000
+  
+  # Maximum memory in MB for window function processing
+  window_memory_limit_mb: 512
+  
+  # Recursion limits
+  # Maximum recursion depth for recursive CTEs
+  max_recursion_depth: 100
+  
+  # Timeout in milliseconds for recursive queries
+  recursion_timeout_ms: 30000
+  
+  # Aggregate limits
+  # Maximum memory in MB for aggregate function processing
+  aggregate_max_memory_mb: 128
+  
+  # Precision for approximate aggregate functions (0.0-1.0)
+  # Lower values mean higher precision but more memory usage
+  approx_aggregate_precision: 0.01
