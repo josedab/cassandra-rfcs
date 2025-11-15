@@ -1252,6 +1252,49 @@ concurrent_materialized_view_builders: 1
 # for repairs).
 compaction_throughput: 64MiB/s
 
+################################################################################
+# Unified Compaction Strategy (UCS) Configuration
+# Part of RFC-0003: Unified Compaction Strategy Production Hardening
+################################################################################
+
+# Unified Compaction Strategy adaptive tuning and monitoring settings
+# unified_compaction_strategy:
+
+    # Enable adaptive tuning - automatically adjust UCS parameters based on workload
+    # adaptive_tuning_enabled: true
+
+    # Workload detection interval - how often to analyze and adjust parameters
+    # Min unit: h
+    # workload_detection_interval: 1h
+
+    # Auto-tuning sensitivity (0.0 to 1.0) - controls how aggressively parameters are adjusted
+    # Higher values make more aggressive adjustments, lower values are more conservative
+    # tuning_sensitivity: 0.5
+
+    # Target read/write amplification tradeoff
+    # Options: read_optimized, write_optimized, balanced
+    # amplification_goal: balanced
+
+    # Enable A/B testing mode for comparing UCS with other strategies
+    # ab_testing_enabled: false
+
+    # Sample rate for A/B testing (0.0 to 1.0)
+    # ab_testing_sample_rate: 0.1
+
+    # Advanced UCS parameters
+    # Minimum scaling parameter allowed by adaptive tuning
+    # min_scaling_parameter: 2
+
+    # Maximum scaling parameter allowed by adaptive tuning
+    # max_scaling_parameter: 32
+
+    # Default target SSTable size in MB
+    # Min unit: MiB
+    # target_sstable_size: 160MiB
+
+    # Enable aggressive tombstone compaction for tables with high deletion rates
+    # enable_aggressive_tombstone_compaction: true
+
 # When compacting, the replacement sstable(s) can be opened before they
 # are completely written, and used in place of the prior sstables for
 # any range that has been written. This helps to smoothly transfer reads

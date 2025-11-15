@@ -72,6 +72,8 @@ public final class SystemViewsKeyspace extends VirtualKeyspace
                     .addAll(StorageAttachedIndexTables.getAll(VIRTUAL_VIEWS))
                     .addAll(AccordVirtualTables.getAll(VIRTUAL_VIEWS))
                     .add(new ExceptionsTable(VIRTUAL_VIEWS))
+                    .add(new UCSShardsTable(VIRTUAL_VIEWS))
+                    .add(new UCSEfficiencyTable(VIRTUAL_VIEWS))
                     .build());
     }
 }
