@@ -1,0 +1,84 @@
+graph TB
+    subgraph "Leveled Compaction Strategy (LCS)"
+        direction TB
+        
+        subgraph "L0 - Unsorted Level"
+            L0_1[SSTable 160MB]
+            L0_2[SSTable 160MB]
+            L0_3[SSTable 160MB]
+            L0_4[SSTable 160MB]
+            Note0[From memtable flushes<br/>May overlap]
+        end
+        
+        subgraph "L1 - Level 1 (10× L0)"
+            L1_1[SSTable 160MB]
+            L1_2[SSTable 160MB]
+            L1_3[SSTable 160MB]
+            L1_N[... up to 10 SSTables]
+            Note1[Max: 1.6GB<br/>Non-overlapping token ranges]
+        end
+        
+        subgraph "L2 - Level 2 (10× L1)"
+            L2_1[SSTable 160MB]
+            L2_2[SSTable 160MB]
+            L2_N[... up to 100 SSTables]
+            Note2[Max: 16GB<br/>Non-overlapping token ranges]
+        end
+        
+        subgraph "L3 - Level 3 (10× L2)"
+            L3_1[SSTable 160MB]
+            L3_N[... up to 1000 SSTables]
+            Note3[Max: 160GB<br/>Non-overlapping token ranges]
+        end
+        
+        subgraph "L4 - Level 4 (10× L3)"
+            L4_1[SSTable 160MB]
+            L4_N[... up to 10000 SSTables]
+            Note4[Max: 1.6TB<br/>Non-overlapping token ranges]
+        end
+    end
+    
+    subgraph "Compaction Flow"
+        direction LR
+        Flush[Memtable Flush] -->|Creates| L0_New[L0 SSTable]
+        L0_New -->|Threshold: 4 SSTables| Compact0[Compact L0→L1]
+        Compact0 -->|Merge with overlapping| L1_New[L1 SSTables]
+        L1_New -->|Level full| Compact1[Compact L1→L2]
+        Compact1 -->|Merge with overlapping| L2_New[L2 SSTables]
+        L2_New -->|Level full| Compact2[Continue to L3...]
+    end
+    
+    subgraph "Read Path Benefit"
+        Query[Query: key=X]
+        Query -->|Check| L0_Check{L0: Check all<br/>4 SSTables}
+        L0_Check -->|Check| L1_Check{L1: Binary search<br/>1 SSTable}
+        L1_Check -->|Check| L2_Check{L2: Binary search<br/>1 SSTable}
+        L2_Check -->|Check| L3_Check{L3: Binary search<br/>1 SSTable}
+        L3_Check -->|Found or not found| Result[Max: 7-8 SSTables]
+    end
+    
+    subgraph "Key Characteristics"
+        Char1[✓ Predictable read performance]
+        Char2[✓ Low read amplification]
+        Char3[✓ Good space amplification]
+        Char4[✗ High write amplification]
+        Char5[✗ Continuous compaction overhead]
+        Char6[Best for: Read-heavy workloads]
+    end
+    
+    L0_1 -.->|Compact when 4+| Compact0
+    L0_2 -.-> Compact0
+    L0_3 -.-> Compact0
+    L0_4 -.-> Compact0
+    
+    style L0_1 fill:#ffe1e1
+    style L0_2 fill:#ffe1e1
+    style L0_3 fill:#ffe1e1
+    style L0_4 fill:#ffe1e1
+    style L1_1 fill:#fff4e1
+    style L1_2 fill:#fff4e1
+    style L1_3 fill:#fff4e1
+    style L2_1 fill:#e1f5ff
+    style L3_1 fill:#e1ffe1
+    style L4_1 fill:#f0e1ff
+    style Result fill:#e1ffe1

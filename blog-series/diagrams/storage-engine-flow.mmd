@@ -1,0 +1,38 @@
+sequenceDiagram
+    participant Client
+    participant Coordinator
+    participant Memtable
+    participant CommitLog
+    participant SSTable
+    participant Compaction
+    
+    Client->>Coordinator: WRITE request
+    
+    par Write to Commit Log
+        Coordinator->>CommitLog: Append entry
+        CommitLog-->>Coordinator: Durable
+    and Write to Memtable
+        Coordinator->>Memtable: Insert data
+        Memtable-->>Coordinator: Complete
+    end
+    
+    Coordinator-->>Client: ACK
+    
+    Note over Memtable: Memtable fills up
+    
+    Memtable->>SSTable: Flush to disk
+    Note over SSTable: Immutable sorted file
+    
+    loop Background Process
+        Compaction->>SSTable: Merge multiple SSTables
+        SSTable-->>Compaction: New compacted SSTable
+    end
+    
+    Note over CommitLog: Segments cleaned<br/>after memtable flush
+```
+
+**Write Path:**
+1. Commit Log: Durability (sequential write)
+2. Memtable: In-memory buffer (sorted structure)
+3. SSTable: Persistent storage (immutable)
+4. Compaction: Merge and cleanup (background)

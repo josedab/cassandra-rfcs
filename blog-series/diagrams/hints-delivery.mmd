@@ -1,0 +1,92 @@
+sequenceDiagram
+    participant Client
+    participant Coord as Coordinator Node
+    participant Replica1 as Replica 1 (UP)
+    participant Replica2 as Replica 2 (DOWN)
+    participant HintsBuffer as Hints Buffer
+    participant HintsFile as Hints File
+    participant Dispatcher as Hints Dispatcher
+    
+    Client->>Coord: Write request (RF=3, CL=QUORUM)
+    
+    rect rgb(255, 240, 200)
+        Note over Coord,Replica2: Normal Replication Attempt
+        
+        Coord->>Replica1: Write mutation
+        Replica1->>Replica1: Write to memtable
+        Replica1-->>Coord: ACK (success)
+        
+        Coord->>Replica2: Write mutation
+        Note over Replica2: Node is DOWN<br/>Timeout after 2s
+        Replica2--xCoord: Timeout/Connection refused
+        
+        Note over Coord: CL=QUORUM requires 2/3<br/>Only 1 ACK received<br/>Need to store hint
+    end
+    
+    rect rgb(255, 200, 200)
+        Note over Coord,HintsBuffer: Hint Creation
+        
+        Coord->>Coord: Create hint
+        Note over Coord: Hint contains:<br/>- Target node ID<br/>- Original mutation<br/>- Timestamp<br/>- TTL (3 hours default)
+        
+        Coord->>HintsBuffer: Store hint in memory
+        Note over HintsBuffer: In-memory buffer<br/>Max size: 128MB per node
+        
+        alt Buffer has space
+            HintsBuffer-->>Coord: Hint buffered
+        else Buffer full
+            HintsBuffer->>HintsFile: Flush to disk
+            Note over HintsFile: Hints stored in<br/>compressed files<br/>hints/{target_node_id}/
+        end
+        
+        Coord-->>Client: Success (if CL met with hints)
+    end
+    
+    Note over Coord,Replica2: Time passes...<br/>Replica2 recovers
+    
+    rect rgb(200, 240, 255)
+        Note over Dispatcher,Replica2: Hint Delivery - Background Process
+        
+        Dispatcher->>Dispatcher: Check for hints (every 10s)
+        Dispatcher->>HintsFile: Read hints for Replica2
+        
+        Note over Dispatcher: Delivery throttling:<br/>- Max rate: 1024 hints/s<br/>- Back-off on failure<br/>- Pause on overload
+        
+        loop Delivery batch (128 hints)
+            Dispatcher->>Replica2: Send hint batch
+            
+            alt Replica2 is UP and responsive
+                Replica2->>Replica2: Apply mutations
+                Replica2->>Replica2: Write to memtable
+                Replica2-->>Dispatcher: ACK batch
+                Dispatcher->>HintsFile: Mark hints as delivered
+            else Replica2 still DOWN
+                Replica2--xDispatcher: Timeout
+                Dispatcher->>Dispatcher: Exponential back-off
+                Note over Dispatcher: Wait before retry<br/>1s → 2s → 4s → 8s...
+            end
+        end
+        
+        Dispatcher->>HintsFile: Delete delivered hints
+        Note over HintsFile: Cleanup old hint files
+    end
+    
+    rect rgb(240, 255, 200)
+        Note over Dispatcher,HintsFile: Hint Expiration
+        
+        alt Hint age > max_hint_window (3 hours)
+            Dispatcher->>HintsFile: Delete expired hints
+            Note over Dispatcher: Hints dropped<br/>Manual repair needed
+        end
+    end
+    
+    Note over Client,Dispatcher: Hint Statistics:<br/>- Created: Counter per target node<br/>- In flight: Current buffered<br/>- Delivered: Total sent<br/>- Failed: Delivery failures
+    
+    Note over Client,Dispatcher: Configuration:<br/>- max_hint_window_in_ms: 10800000 (3h)<br/>- hinted_handoff_throttle_in_kb: 1024<br/>- max_hints_delivery_threads: 2<br/>- hints_directory: /var/lib/cassandra/hints
+    
+    style Coord fill:#e1ffe1
+    style Replica1 fill:#e1f5ff
+    style Replica2 fill:#ffe1e1
+    style HintsBuffer fill:#fff4e1
+    style HintsFile fill:#ffe1f5
+    style Dispatcher fill:#f0e1ff

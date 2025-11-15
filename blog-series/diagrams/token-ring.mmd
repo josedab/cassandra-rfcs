@@ -1,0 +1,33 @@
+graph TD
+    subgraph "Token Ring (256-bit Token Space)"
+        T0[Token: 0<br/>Node A]
+        T1[Token: 42535...123<br/>Node B]
+        T2[Token: 85070...246<br/>Node C]
+        T3[Token: 127605...369<br/>Node A]
+        T4[Token: 170140...492<br/>Node B]
+        T5[Token: max<br/>Node C]
+    end
+    
+    T0 --> T1
+    T1 --> T2
+    T2 --> T3
+    T3 --> T4
+    T4 --> T5
+    T5 -.wraps around.-> T0
+    
+    Data[("Data<br/>user_id: abc123")]
+    Hash["Hash(abc123)<br/>= 127605...369"]
+    
+    Data --> Hash
+    Hash -.->|"Routes to"| T3
+    
+    style T3 fill:#90EE90
+    style Data fill:#FFE4B5
+    style Hash fill:#87CEEB
+```
+
+**Key Concepts:**
+- Token space divided into ranges
+- Each node responsible for multiple ranges (vnodes)
+- Data routed by hashing partition key
+- Even distribution across cluster

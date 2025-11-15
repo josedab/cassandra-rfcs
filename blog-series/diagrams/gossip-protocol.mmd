@@ -1,0 +1,88 @@
+stateDiagram-v2
+    [*] --> Down: Node starts
+    
+    Down --> Joining: Bootstrap begins
+    note right of Joining
+        Node learns cluster topology
+        Receives token assignments
+        Streams data from replicas
+    end note
+    
+    Joining --> Normal: Bootstrap complete
+    note right of Normal
+        Fully operational
+        Serving reads/writes
+        Participating in gossip
+        Heartbeat every 1 second
+    end note
+    
+    Normal --> Leaving: Decommission initiated
+    note right of Leaving
+        Streams data to new replicas
+        Announces departure
+        Releases token ownership
+    end note
+    
+    Normal --> Moving: Token rebalance
+    note right of Moving
+        Changing token assignments
+        Streaming data
+        Temporary state
+    end note
+    
+    Normal --> Down: Missed heartbeats
+    note right of Down
+        Failure detector timeout
+        Phi > threshold (default: 8)
+        Mark as DOWN in gossip
+    end note
+    
+    Moving --> Normal: Move complete
+    Leaving --> Left: Decommission complete
+    Left --> [*]
+    
+    Down --> Normal: Node recovers
+    note left of Down
+        Gossip State Info:
+        - Generation (timestamp)
+        - Version (increments)
+        - Heartbeat counter
+        - Application state
+    end note
+    
+    state Normal {
+        [*] --> Gossiping
+        Gossiping --> SelectPeer: Every 1 second
+        SelectPeer --> SendDigest: Choose 1-3 random nodes
+        SendDigest --> ReceiveAck: GossipDigestSyn
+        ReceiveAck --> UpdateState: GossipDigestAck
+        UpdateState --> SendAck2: Reconcile versions
+        SendAck2 --> Gossiping: GossipDigestAck2
+        
+        note right of SelectPeer
+            Peer selection:
+            - Live nodes (weighted)
+            - Dead nodes (occasionally)
+            - Seed nodes (priority)
+        end note
+    }
+    
+    state FailureDetection {
+        [*] --> Monitoring
+        Monitoring --> CalculatePhi: Heartbeat received
+        CalculatePhi --> CheckThreshold: Phi accrual
+        CheckThreshold --> Alive: Phi < 8
+        CheckThreshold --> Suspect: Phi >= 8
+        Suspect --> Dead: Sustained high Phi
+        Alive --> Monitoring
+        Dead --> Monitoring: Mark DOWN
+        
+        note left of CalculatePhi
+            Phi = -log10(P(t_now))
+            P(t) = probability of
+            heartbeat arriving at t
+            
+            Adaptive to network
+            conditions
+        end note
+    }

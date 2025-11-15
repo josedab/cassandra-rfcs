@@ -1,0 +1,90 @@
+graph TD
+    Start[Data Modeling Decision]
+    
+    Start --> Q1{What's the primary<br/>access pattern?}
+    
+    Q1 -->|Point queries by ID| SinglePartition
+    Q1 -->|Range queries| TimeSeriesOrRange
+    Q1 -->|Multiple access patterns| MultiplePatterns
+    Q1 -->|Aggregations/Analytics| AggregationPattern
+    
+    subgraph "Single Partition Pattern"
+        SinglePartition[Single Partition Key Design]
+        SinglePartition --> SP1{Need clustering?}
+        SP1 -->|No| SimpleTable[Simple Table<br/>PRIMARY KEY partition_key]
+        SP1 -->|Yes| ClusteredTable[Clustered Table<br/>PRIMARY KEY partition_key, clustering_key]
+        
+        SimpleTable --> Ex1[Example: users table<br/>PRIMARY KEY user_id]
+        ClusteredTable --> Ex2[Example: user_posts<br/>PRIMARY KEY user_id, post_time]
+    end
+    
+    subgraph "Time Series / Range Pattern"
+        TimeSeriesOrRange[Time Series Design]
+        TimeSeriesOrRange --> TS1{Query span?}
+        TS1 -->|Recent data only| BucketByDay[Bucket by day/hour<br/>PRIMARY KEY date, timestamp]
+        TS1 -->|Historical queries| BucketByMonth[Bucket by month<br/>PRIMARY KEY year_month, timestamp]
+        
+        BucketByDay --> TS2{Data volume?}
+        TS2 -->|High| AddShard[Add shard key<br/>PRIMARY KEY date, shard, timestamp]
+        TS2 -->|Low| NoShard[Use simple bucket<br/>PRIMARY KEY date, timestamp]
+        
+        BucketByDay --> Ex3[Example: sensor_data<br/>PRIMARY KEY date, sensor_id, timestamp<br/>Compaction: TWCS]
+        AddShard --> Ex4[Example: high_volume_events<br/>PRIMARY KEY date, shard, timestamp<br/>Shard count: 10-100]
+    end
+    
+    subgraph "Multiple Access Patterns"
+        MultiplePatterns[Need Multiple Tables]
+        MultiplePatterns --> MP1{Can denormalize?}
+        MP1 -->|Yes| DenormalizeTable[Create denormalized tables<br/>One per access pattern]
+        MP1 -->|No| UseIndex[Consider Secondary Index<br/>or Materialized View]
+        
+        DenormalizeTable --> Ex5[Example:<br/>users_by_id PRIMARY KEY user_id<br/>users_by_email PRIMARY KEY email]
+        UseIndex --> IndexChoice{Index type?}
+        IndexChoice -->|Simple equality| SecondaryIndex[Secondary Index SAI<br/>For low-cardinality]
+        IndexChoice -->|Complex query| MaterializedView[Materialized View<br/>For different clustering]
+        
+        SecondaryIndex --> Ex6[Example:<br/>CREATE INDEX ON users status<br/>WHERE status = 'active']
+        MaterializedView --> Ex7[Example:<br/>CREATE MATERIALIZED VIEW posts_by_category<br/>PRIMARY KEY category, post_time]
+    end
+    
+    subgraph "Aggregation Pattern"
+        AggregationPattern[Pre-aggregate or Counter]
+        AggregationPattern --> Agg1{What aggregation?}
+        Agg1 -->|Count/Sum| CounterTable[Counter columns<br/>PRIMARY KEY partition_key]
+        Agg1 -->|Other stats| PreAggregate[Application-level<br/>pre-aggregation]
+        
+        CounterTable --> Ex8[Example: page_views<br/>view_count counter<br/>PRIMARY KEY page_id, date]
+        PreAggregate --> Ex9[Example: hourly_stats<br/>Store pre-computed rollups]
+    end
+    
+    subgraph "Key Anti-Patterns to Avoid"
+        AP1[❌ Don't: Use secondary index on high cardinality]
+        AP2[❌ Don't: Create hot partitions]
+        AP3[❌ Don't: Use ALLOW FILTERING in production]
+        AP4[❌ Don't: Store large blobs >10MB]
+        AP5[❌ Don't: Have unbounded partition growth]
+    end
+    
+    subgraph "Best Practices"
+        BP1[✓ Do: Keep partition size <100MB]
+        BP2[✓ Do: Limit clustering rows <100K per partition]
+        BP3[✓ Do: Use appropriate compaction strategy]
+        BP4[✓ Do: Model queries first, then schema]
+        BP5[✓ Do: Denormalize for read performance]
+    end
+    
+    style Start fill:#e1ffe1
+    style SinglePartition fill:#e1f5ff
+    style TimeSeriesOrRange fill:#fff4e1
+    style MultiplePatterns fill:#ffe1f5
+    style AggregationPattern fill:#f0e1ff
+    style AP1 fill:#ffe1e1
+    style AP2 fill:#ffe1e1
+    style AP3 fill:#ffe1e1
+    style AP4 fill:#ffe1e1
+    style AP5 fill:#ffe1e1
+    style BP1 fill:#e1ffe1
+    style BP2 fill:#e1ffe1
+    style BP3 fill:#e1ffe1
+    style BP4 fill:#e1ffe1
+    style BP5 fill:#e1ffe1

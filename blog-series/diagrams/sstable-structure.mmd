@@ -1,0 +1,65 @@
+graph TB
+    subgraph "SSTable Components"
+        Data[Data.db<br/>Actual data rows]
+        Index[Index.db<br/>Partition index]
+        Summary[Summary.db<br/>Index summary]
+        Filter[Filter.db<br/>Bloom filter]
+        Stats[Statistics.db<br/>Metadata]
+        TOC[TOC.txt<br/>Table of contents]
+    end
+    
+    subgraph "Data.db Internal Structure"
+        direction LR
+        Partition1[Partition 1<br/>Key: user_1]
+        Partition2[Partition 2<br/>Key: user_2]
+        PartitionN[Partition N<br/>Key: user_N]
+        
+        Partition1 --> Rows1[Clustering Rows<br/>sorted by clustering key]
+        Partition2 --> Rows2[Clustering Rows<br/>sorted by clustering key]
+        PartitionN --> RowsN[Clustering Rows<br/>sorted by clustering key]
+    end
+    
+    subgraph "Index.db Structure"
+        direction LR
+        Entry1[Entry 1<br/>Key: user_1<br/>Offset: 0]
+        Entry2[Entry 2<br/>Key: user_2<br/>Offset: 1024]
+        EntryN[Entry N<br/>Key: user_N<br/>Offset: 512000]
+    end
+    
+    subgraph "Bloom Filter"
+        direction LR
+        BF[Bit Array<br/>Probabilistic data structure]
+        Hash1[Hash Function 1]
+        Hash2[Hash Function 2]
+        HashN[Hash Function N]
+    end
+    
+    subgraph "Read Path"
+        Query[Query: user_5]
+        CheckFilter{Bloom Filter<br/>might contain?}
+        CheckIndex{Index lookup}
+        SeekData[Seek to offset]
+        ReadData[Read partition]
+        NotFound[Return: Not Found]
+    end
+    
+    Query --> CheckFilter
+    CheckFilter -->|No| NotFound
+    CheckFilter -->|Maybe| CheckIndex
+    CheckIndex --> Summary
+    Summary --> Index
+    CheckIndex --> SeekData
+    SeekData --> Data
+    Data --> ReadData
+    
+    Filter --> BF
+    BF --> Hash1
+    BF --> Hash2
+    BF --> HashN
+    
+    style Data fill:#e1f5ff
+    style Index fill:#fff4e1
+    style Filter fill:#ffe1f5
+    style Summary fill:#e1ffe1
+    style NotFound fill:#ffe1e1
+    style ReadData fill:#e1ffe1

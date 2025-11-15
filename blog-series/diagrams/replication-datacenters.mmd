@@ -1,0 +1,81 @@
+graph TB
+    subgraph "Client Request"
+        Client[Client Application]
+        Driver[Cassandra Driver]
+    end
+    
+    subgraph "DC1 - US East"
+        Coord1[Coordinator Node 1<br/>Receives Request]
+        Replica1A[Replica 1A<br/>Token Range: 0-25%]
+        Replica1B[Replica 1B<br/>Token Range: 25-50%]
+        Replica1C[Replica 1C<br/>Token Range: 50-75%]
+    end
+    
+    subgraph "DC2 - US West"
+        Replica2A[Replica 2A<br/>Token Range: 0-25%]
+        Replica2B[Replica 2B<br/>Token Range: 25-50%]
+        Replica2C[Replica 2C<br/>Token Range: 50-75%]
+    end
+    
+    subgraph "DC3 - EU"
+        Replica3A[Replica 3A<br/>Token Range: 0-25%]
+        Replica3B[Replica 3B<br/>Token Range: 25-50%]
+        Replica3C[Replica 3C<br/>Token Range: 50-75%]
+    end
+    
+    Client -->|Write Request<br/>Key: user_123<br/>Token: 15%| Driver
+    Driver -->|Smart routing<br/>Token aware| Coord1
+    
+    rect rgb(255, 240, 200)
+        Note over Coord1: Determines replicas<br/>based on token<br/>and replication strategy
+        
+        Coord1 -->|LOCAL Write<br/>Async/Sync| Replica1A
+        Coord1 -->|LOCAL Write<br/>Async/Sync| Replica1B
+        Coord1 -->|LOCAL Write<br/>Async/Sync| Replica1C
+    end
+    
+    rect rgb(200, 240, 255)
+        Note over Coord1,Replica2C: Cross-DC Replication<br/>Usually async
+        
+        Coord1 -.->|Remote Write<br/>Async| Replica2A
+        Coord1 -.->|Remote Write<br/>Async| Replica2B
+        Coord1 -.->|Remote Write<br/>Async| Replica2C
+    end
+    
+    rect rgb(240, 255, 200)
+        Note over Coord1,Replica3C: Cross-DC Replication<br/>Usually async
+        
+        Coord1 -.->|Remote Write<br/>Async| Replica3A
+        Coord1 -.->|Remote Write<br/>Async| Replica3B
+        Coord1 -.->|Remote Write<br/>Async| Replica3C
+    end
+    
+    Replica1A -.->|ACK| Coord1
+    Replica1B -.->|ACK| Coord1
+    Replica1C -.->|ACK| Coord1
+    
+    Note over Coord1: Wait for consistency level<br/>LOCAL_QUORUM = 2/3 in DC1
+    
+    Coord1 -->|Success Response| Driver
+    Driver -->|Response| Client
+    
+    subgraph "Replication Strategy"
+        Config[NetworkTopologyStrategy<br/>DC1: RF=3<br/>DC2: RF=3<br/>DC3: RF=3]
+    end
+    
+    subgraph "Consistency Levels"
+        CL_LOCAL[LOCAL_QUORUM<br/>2/3 in local DC only]
+        CL_EACH[EACH_QUORUM<br/>2/3 in each DC]
+        CL_ALL[ALL<br/>All 9 replicas]
+    end
+    
+    style Coord1 fill:#e1ffe1
+    style Replica1A fill:#e1f5ff
+    style Replica1B fill:#e1f5ff
+    style Replica1C fill:#e1f5ff
+    style Replica2A fill:#fff4e1
+    style Replica2B fill:#fff4e1
+    style Replica2C fill:#fff4e1
+    style Replica3A fill:#ffe1f5
+    style Replica3B fill:#ffe1f5
+    style Replica3C fill:#ffe1f5

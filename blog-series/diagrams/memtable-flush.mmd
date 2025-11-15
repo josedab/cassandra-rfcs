@@ -1,0 +1,45 @@
+sequenceDiagram
+    participant App as Application
+    participant Mem as Memtable
+    participant CL as CommitLog
+    participant Flush as Flush Writer
+    participant SST as SSTable
+    participant Comp as Compaction
+    
+    Note over Mem: Normal Operation
+    App->>Mem: Write data
+    App->>CL: Append to log
+    Mem-->>App: ACK
+    
+    Note over Mem: Memtable fills up
+    rect rgb(255, 240, 200)
+        Note over Mem,Flush: Flush Trigger<br/>(Size threshold or time)
+        Mem->>Mem: Mark as frozen
+        Mem->>Flush: Create flush task
+        
+        par New writes continue
+            App->>Mem: Write to NEW memtable
+            App->>CL: Append to log
+        and Flush in background
+            Flush->>SST: Write frozen data
+            Note over Flush,SST: Sequential write<br/>~100-200 MB/s
+            SST-->>Flush: Write complete
+        end
+        
+        Flush->>SST: Build indexes
+        Note over SST: Partition index<br/>Bloom filter<br/>Summary
+        
+        Flush->>CL: Mark segment safe
+        CL->>CL: Delete old segment
+        
+        Flush-->>Mem: Flush complete
+    end
+    
+    Note over SST,Comp: Post-flush
+    SST->>Comp: Trigger compaction
+    Note over Comp: May compact new SSTable<br/>with existing ones
+    
+    style Mem fill:#e1f5ff
+    style CL fill:#fff4e1
+    style SST fill:#f0f0f0
+    style Comp fill:#e1ffe1

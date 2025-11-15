@@ -1,0 +1,78 @@
+graph TB
+    subgraph "Consistency Level Decision Matrix"
+        Start[Choose Consistency Level]
+        
+        Start --> Use1{Use case priority?}
+        
+        Use1 -->|Availability| AvailPath[Availability-First]
+        Use1 -->|Consistency| ConsPath[Consistency-First]
+        Use1 -->|Balance| BalancePath[Balanced]
+        Use1 -->|Performance| PerfPath[Performance-First]
+    end
+    
+    subgraph "Availability-First (Tolerate Stale Reads)"
+        AvailPath --> AV1{Write or Read?}
+        AV1 -->|Write| WriteONE[ONE or ANY<br/>✓ Fastest<br/>✓ Highest availability<br/>⚠️ Durability risk]
+        AV1 -->|Read| ReadONE[ONE<br/>✓ Fastest<br/>✓ Always available<br/>⚠️ May read stale data]
+        
+        WriteONE --> AVEx1[Use case: Logging,<br/>clickstream, IoT sensors]
+        ReadONE --> AVEx2[Use case: Caching,<br/>recommendations]
+    end
+    
+    subgraph "Consistency-First (Strong Consistency)"
+        ConsPath --> CO1{Single or Multi-DC?}
+        CO1 -->|Single DC| WriteALL[Write: ALL<br/>Read: ALL<br/>✓ Guaranteed consistency<br/>❌ No fault tolerance]
+        CO1 -->|Multi DC| WriteEACH[Write: EACH_QUORUM<br/>Read: LOCAL_QUORUM<br/>✓ Strong per-DC<br/>⚠️ Highest latency]
+        
+        WriteALL --> COEx1[Use case: Financial<br/>transactions, inventory]
+        WriteEACH --> COEx2[Use case: Multi-region<br/>critical data]
+    end
+    
+    subgraph "Balanced (Production Standard)"
+        BalancePath --> BA1{Deployment?}
+        BA1 -->|Single DC| QuorumBoth[Write: QUORUM<br/>Read: QUORUM<br/>✓ R + W > RF = consistency<br/>✓ Tolerates node failures]
+        BA1 -->|Multi DC| LocalQuorum[Write: LOCAL_QUORUM<br/>Read: LOCAL_QUORUM<br/>✓ Balanced latency<br/>✓ DC fault tolerance]
+        
+        QuorumBoth --> BAEx1[Use case: 80% of<br/>production workloads]
+        LocalQuorum --> BAEx2[Use case: Multi-DC<br/>typical application]
+    end
+    
+    subgraph "Performance-First (Lowest Latency)"
+        PerfPath --> PE1{Write or Read?}
+        PE1 -->|Write| WriteLOCAL_ONE[LOCAL_ONE<br/>✓ Lowest write latency<br/>✓ Local DC only<br/>⚠️ Eventual consistency]
+        PE1 -->|Read| ReadLOCAL_ONE[LOCAL_ONE<br/>✓ Lowest read latency<br/>✓ Always from local DC<br/>⚠️ May read stale]
+        
+        WriteLOCAL_ONE --> PEEx1[Use case: High-throughput<br/>writes, session data]
+        ReadLOCAL_ONE --> PEEx2[Use case: Read-heavy<br/>dashboards, analytics]
+    end
+    
+    subgraph "Consistency Level Comparison Table"
+        direction TB
+        Table[<table><tr><th>Level</th><th>Nodes</th><th>Latency</th><th>Availability</th><th>Consistency</th></tr>
+        <tr><td>ANY</td><td>1+ hint</td><td>Lowest</td><td>Highest</td><td>Lowest</td></tr>
+        <tr><td>ONE</td><td>1</td><td>Low</td><td>High</td><td>Eventual</td></tr>
+        <tr><td>TWO</td><td>2</td><td>Medium</td><td>Medium</td><td>Stronger</td></tr>
+        <tr><td>QUORUM</td><td>⌈RF/2⌉</td><td>Medium</td><td>Good</td><td>Strong</td></tr>
+        <tr><td>LOCAL_QUORUM</td><td>⌈RF/2⌉ local</td><td>Medium</td><td>Good</td><td>Strong local</td></tr>
+        <tr><td>EACH_QUORUM</td><td>⌈RF/2⌉ each DC</td><td>High</td><td>Medium</td><td>Strongest</td></tr>
+        <tr><td>ALL</td><td>RF</td><td>Highest</td><td>Lowest</td><td>Guaranteed</td></tr></table>]
+    end
+    
+    subgraph "Formula: R + W > RF = Strong Consistency"
+        Formula[If Read CL + Write CL > Replication Factor<br/>Then: Guaranteed to read latest write<br/><br/>Examples:<br/>QUORUM + QUORUM > 3 ✓<br/>ONE + ALL > 3 ✓<br/>ONE + ONE > 3 ✗]
+    end
+    
+    subgraph "Latency Impact (3-node cluster, RF=3)"
+        Latency[<table><tr><th>CL</th><th>Write Ops/s</th><th>Read Ops/s</th><th>p95 Latency</th></tr>
+        <tr><td>ANY/ONE</td><td>72,300</td><td>142,500</td><td>2.4ms</td></tr>
+        <tr><td>QUORUM</td><td>52,800</td><td>87,600</td><td>5.2ms</td></tr>
+        <tr><td>ALL</td><td>41,200</td><td>73,400</td><td>8.7ms</td></tr></table>]
+    end
+    
+    style Start fill:#e1ffe1
+    style WriteONE fill:#ffe1e1
+    style ReadONE fill:#ffe1e1
+    style QuorumBoth fill:#e1f5ff
+    style LocalQuorum fill:#e1f5ff
+    style WriteALL fill:#fff4e1
+    style WriteLOCAL_ONE fill:#f0e1ff

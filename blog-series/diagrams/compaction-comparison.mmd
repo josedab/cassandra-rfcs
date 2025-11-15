@@ -1,0 +1,39 @@
+graph TD
+    subgraph "STCS - Size-Tiered"
+        STCS1[4 SSTables<br/>~10MB each] --> STCS2[1 SSTable<br/>~40MB]
+        STCS3[4 SSTables<br/>~40MB each] --> STCS4[1 SSTable<br/>~160MB]
+        STCS5[Space: 50% overhead<br/>Reads: O(log N)]
+    end
+    
+    subgraph "LCS - Leveled"
+        LCS_L0[L0: Overlapping<br/>4 SSTables] --> LCS_L1
+        LCS_L1[L1: 10 SSTables<br/>160MB each] --> LCS_L2
+        LCS_L2[L2: 100 SSTables<br/>160MB each]
+        LCS5[Space: 10% overhead<br/>Reads: 1-2 SSTables]
+    end
+    
+    subgraph "TWCS - Time Window"
+        TWCS1[Window: Day 1<br/>All SSTables] 
+        TWCS2[Window: Day 2<br/>All SSTables]
+        TWCS3[Window: Day 3<br/>All SSTables]
+        TWCS5[Space: 20% overhead<br/>Drop entire windows]
+    end
+    
+    subgraph "UCS - Unified (5.0+)"
+        UCS1[Adaptive Levels<br/>Density-based]
+        UCS2[Parallel Shards<br/>Per token range]
+        UCS3[Configurable Fanout<br/>T2, T4, L8, N]
+        UCS5[Space: 20-30% overhead<br/>Best of all worlds]
+    end
+    
+    style STCS5 fill:#FFE4B5
+    style LCS5 fill:#90EE90
+    style TWCS5 fill:#87CEEB
+    style UCS5 fill:#DDA0DD
+```
+
+**Decision Matrix:**
+- **STCS**: Write-heavy, temporary data
+- **LCS**: Read-heavy, bounded dataset
+- **TWCS**: Time-series with TTL
+- **UCS**: General purpose, adaptive

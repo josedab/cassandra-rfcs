@@ -1,0 +1,67 @@
+sequenceDiagram
+    participant Flush as Memtable Flush
+    participant SST as SSTables
+    participant STCS as STCS Strategy
+    participant Comp as Compactor
+    participant New as New SSTable
+    
+    Note over Flush,SST: Initial State: 0 SSTables
+    
+    Flush->>SST: Flush creates SSTable-1 (100MB)
+    Note over SST: 1 SSTable (Tier 0)
+    
+    Flush->>SST: Flush creates SSTable-2 (100MB)
+    Note over SST: 2 SSTables (Tier 0)
+    
+    Flush->>SST: Flush creates SSTable-3 (100MB)
+    Note over SST: 3 SSTables (Tier 0)
+    
+    Flush->>SST: Flush creates SSTable-4 (100MB)
+    Note over SST: 4 SSTables (Tier 0)
+    
+    rect rgb(255, 240, 200)
+        Note over STCS: Trigger: min_threshold (4) reached
+        STCS->>STCS: Identify similar-sized SSTables
+        STCS->>Comp: Compact SST-1,2,3,4
+        
+        par Continue accepting writes
+            Flush->>SST: Flush creates SSTable-5
+        and Compaction in background
+            Comp->>Comp: Merge 4 SSTables
+            Note over Comp: Read all 4 (400MB)<br/>Merge and deduplicate<br/>Write amplification: ~4×
+            Comp->>New: Create SSTable-A (350MB)
+            Note over New: Tier 1: Larger SSTable
+        end
+        
+        Comp->>SST: Delete SST-1,2,3,4
+        Comp->>SST: Add SSTable-A
+    end
+    
+    Note over SST: State: SST-5 (Tier 0) + SST-A (Tier 1)
+    
+    Flush->>SST: More flushes... SST-6,7,8
+    Note over SST: 4 SSTables in Tier 0 again
+    
+    rect rgb(255, 240, 200)
+        Note over STCS: Second compaction
+        STCS->>Comp: Compact SST-5,6,7,8
+        Comp->>New: Create SSTable-B (350MB)
+    end
+    
+    Note over SST: State: SST-A (Tier 1) + SST-B (Tier 1)
+    
+    Note over SST: Eventually: 4 Tier-1 SSTables
+    
+    rect rgb(255, 240, 200)
+        Note over STCS: Major compaction<br/>Tier 1 → Tier 2
+        STCS->>Comp: Compact 4 × 350MB SSTables
+        Note over Comp: Read 1.4GB<br/>Write amplification: ~16×
+        Comp->>New: Create SSTable-X (1.2GB)
+        Note over New: Tier 2: Very large SSTable
+    end
+    
+    Note over SST,New: STCS Characteristics:<br/>✓ Low write amplification initially<br/>✓ Good for write-heavy workloads<br/>✗ High space amplification (up to 50%)<br/>✗ High read amplification (many SSTables)
+    
+    style SST fill:#e1f5ff
+    style New fill:#e1ffe1
+    style Comp fill:#fff4e1

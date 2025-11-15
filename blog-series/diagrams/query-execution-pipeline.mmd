@@ -1,0 +1,81 @@
+sequenceDiagram
+    participant Client
+    participant Driver
+    participant Coord as Coordinator
+    participant Parser as CQL Parser
+    participant Planner as Query Planner
+    participant Auth as Authorization
+    participant Executor as Query Executor
+    participant Storage as Storage Layer
+    participant Replica as Replica Nodes
+    
+    Client->>Driver: SELECT * FROM users WHERE user_id = ?
+    Driver->>Driver: Prepare statement (if needed)
+    Driver->>Coord: CQL Query + Parameters
+    
+    rect rgb(255, 240, 200)
+        Note over Coord,Parser: Parsing Phase
+        Coord->>Parser: Parse CQL
+        Parser->>Parser: Validate syntax
+        Parser->>Parser: Build AST
+        Parser-->>Coord: Parsed statement
+    end
+    
+    rect rgb(240, 255, 200)
+        Note over Coord,Auth: Authorization Phase
+        Coord->>Auth: Check permissions
+        Auth->>Auth: Verify user grants
+        Auth-->>Coord: Authorized
+    end
+    
+    rect rgb(200, 240, 255)
+        Note over Coord,Planner: Planning Phase
+        Coord->>Planner: Create query plan
+        Planner->>Planner: Determine token/partition
+        Planner->>Planner: Find replica nodes
+        Planner->>Planner: Choose consistency level
+        Planner->>Planner: Optimize execution
+        Planner-->>Coord: Execution plan
+    end
+    
+    rect rgb(255, 200, 240)
+        Note over Coord,Executor: Execution Phase
+        Coord->>Executor: Execute plan
+        
+        alt Local data available
+            Executor->>Storage: Read from local storage
+            Storage->>Storage: Check memtable
+            Storage->>Storage: Check bloom filters
+            Storage->>Storage: Read SSTables
+            Storage-->>Executor: Partition data
+        else Need remote data
+            Executor->>Replica: Request from replicas (CL)
+            Replica->>Replica: Read local storage
+            Replica-->>Executor: Partition data
+        end
+        
+        Executor->>Executor: Merge results
+        Executor->>Executor: Apply LIMIT
+        Executor->>Executor: Check consistency
+        
+        opt Read repair needed
+            Executor->>Replica: Trigger read repair
+        end
+        
+        Executor-->>Coord: Result set
+    end
+    
+    rect rgb(255, 255, 200)
+        Note over Coord,Driver: Response Phase
+        Coord->>Coord: Serialize results
+        Coord-->>Driver: CQL Result
+        Driver->>Driver: Deserialize to objects
+        Driver-->>Client: User objects
+    end
+    
+    Note over Client,Replica: Total Latency Breakdown<br/>Parse: ~0.1ms<br/>Auth: ~0.05ms<br/>Plan: ~0.2ms<br/>Execute: 0.5-5ms (varies)<br/>Response: ~0.1ms
+    
+    style Parser fill:#fff4e1
+    style Planner fill:#e1f5ff
+    style Executor fill:#ffe1f5
+    style Storage fill:#e1ffe1

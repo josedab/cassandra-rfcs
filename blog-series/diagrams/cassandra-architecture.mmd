@@ -1,0 +1,66 @@
+graph TB
+    subgraph "Client Layer"
+        Client[Client Application]
+        Driver[Cassandra Driver<br/>CQL Protocol]
+    end
+    
+    subgraph "Cassandra Node"
+        CQLServer[CQL Server<br/>Port 9042]
+        Coordinator[Coordinator]
+        
+        subgraph "Storage Engine"
+            Memtable[Memtable<br/>In-Memory]
+            CommitLog[CommitLog<br/>Append-only]
+            SSTable[SSTables<br/>Immutable]
+            Compaction[Compaction<br/>Background]
+        end
+        
+        subgraph "Distributed Layer"
+            Gossip[Gossip Protocol<br/>Port 7000]
+            Replication[Replication<br/>Handler]
+            ReadRepair[Read Repair]
+        end
+        
+        subgraph "Query Layer"
+            Parser[CQL Parser]
+            QueryPlan[Query Planner]
+            Executor[Query Executor]
+        end
+    end
+    
+    subgraph "Other Nodes"
+        Replica1[Replica Node 1]
+        Replica2[Replica Node 2]
+        ReplicaN[Replica Node N]
+    end
+    
+    Client -->|CQL Query| Driver
+    Driver -->|TCP/IP| CQLServer
+    CQLServer --> Parser
+    Parser --> QueryPlan
+    QueryPlan --> Executor
+    Executor --> Coordinator
+    
+    Coordinator -->|Write| Memtable
+    Coordinator -->|Write| CommitLog
+    Memtable -.->|Flush| SSTable
+    SSTable -.->|Compact| Compaction
+    
+    Coordinator -->|Replicate| Replication
+    Replication -->|Network| Replica1
+    Replication -->|Network| Replica2
+    Replication -->|Network| ReplicaN
+    
+    Coordinator <-->|Cluster State| Gossip
+    Gossip <-->|Heartbeat| Replica1
+    Gossip <-->|Heartbeat| Replica2
+    
+    Executor -->|Read| SSTable
+    Executor -->|Read| Memtable
+    Executor -.->|If needed| ReadRepair
+    
+    style Memtable fill:#e1f5ff
+    style CommitLog fill:#fff4e1
+    style SSTable fill:#f0f0f0
+    style Gossip fill:#ffe1f5
+    style Coordinator fill:#e1ffe1

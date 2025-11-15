@@ -1,0 +1,89 @@
+sequenceDiagram
+    participant Admin as Administrator
+    participant Node1 as Node 1 (Coordinator)
+    participant Node2 as Node 2 (Replica)
+    participant Node3 as Node 3 (Replica)
+    participant MT as Merkle Trees
+    
+    Admin->>Node1: nodetool repair keyspace.table
+    
+    rect rgb(255, 240, 200)
+        Note over Node1,Node3: Phase 1: Prepare<br/>Build Merkle Trees
+        
+        par Build trees in parallel
+            Node1->>Node1: Read all partitions
+            Node1->>Node1: Hash partition data
+            Node1->>MT: Build Merkle tree
+        and
+            Node1->>Node2: Prepare repair session
+            Node2->>Node2: Read all partitions
+            Node2->>Node2: Hash partition data
+            Node2->>MT: Build Merkle tree
+        and
+            Node1->>Node3: Prepare repair session
+            Node3->>Node3: Read all partitions
+            Node3->>Node3: Hash partition data
+            Node3->>MT: Build Merkle tree
+        end
+        
+        Note over MT: Tree depth: ~15 levels<br/>Leaf size: 512KB-1MB<br/>Build time: 1-10 min
+    end
+    
+    rect rgb(200, 240, 255)
+        Note over Node1,Node3: Phase 2: Compare<br/>Exchange Trees
+        
+        Node2-->>Node1: Send Merkle tree
+        Node3-->>Node1: Send Merkle tree
+        
+        Node1->>Node1: Compare trees
+        Node1->>Node1: Identify differences
+        Node1->>Node1: Determine sync ranges
+        
+        Note over Node1: Differences found:<br/>- Range 1: Node2 has newer data<br/>- Range 2: Node3 missing data<br/>- Range 3: Node1 has unique data
+    end
+    
+    rect rgb(240, 255, 200)
+        Note over Node1,Node3: Phase 3: Stream<br/>Synchronize Data
+        
+        alt Symmetric repair (default)
+            Node1->>Node2: Stream range 3 data
+            Node2->>Node1: Stream range 1 data
+            Node2->>Node3: Stream range 1 data
+            Node3->>Node1: Stream range 2 data (request)
+            Node1->>Node3: Stream range 2 data
+        else Asymmetric repair (pull only)
+            Node1->>Node2: Request range 1 data
+            Node2->>Node1: Stream range 1 data
+            Node1->>Node3: Request range 2 data
+            Note over Node3: Node3 doesn't exist,<br/>get from Node1
+        end
+        
+        Note over Node1,Node3: Streaming rate:<br/>~200-800 MB/s<br/>Throttled to avoid impact
+    end
+    
+    rect rgb(255, 255, 200)
+        Note over Node1,Node3: Phase 4: Validate<br/>Verify Consistency
+        
+        par Verify repairs
+            Node1->>Node1: Validate received data
+            Node1->>Node1: Write to SSTables
+        and
+            Node2->>Node2: Validate received data
+            Node2->>Node2: Write to SSTables
+        and
+            Node3->>Node3: Validate received data
+            Node3->>Node3: Write to SSTables
+        end
+        
+        Node1-->>Admin: Repair session complete
+        Note over Admin: Success!<br/>Replicas now consistent
+    end
+    
+    Note over Admin,MT: Repair Types:<br/>Full: All data<br/>Incremental: Only unrepaired data<br/>Subrange: Specific token range
+    
+    Note over Admin,MT: Performance Impact:<br/>CPU: 20-40% per node<br/>Disk I/O: High (read all data)<br/>Network: 200-800 MB/s<br/>Duration: Minutes to hours
+    
+    style Node1 fill:#e1ffe1
+    style Node2 fill:#e1f5ff
+    style Node3 fill:#fff4e1
+    style MT fill:#ffe1f5
