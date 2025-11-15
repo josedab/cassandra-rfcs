@@ -19,8 +19,10 @@ package org.apache.cassandra.tools.schemadesigner;
 
 import org.apache.cassandra.tools.schemadesigner.analyzer.QueryAnalyzer;
 import org.apache.cassandra.tools.schemadesigner.generator.SchemaGenerator;
+import org.apache.cassandra.tools.schemadesigner.migration.*;
 import org.apache.cassandra.tools.schemadesigner.model.*;
 import org.apache.cassandra.tools.schemadesigner.rules.SchemaAnalyzer;
+import org.apache.cassandra.tools.schemadesigner.wizard.InteractiveDesignWizard;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -34,20 +36,24 @@ import java.util.List;
  *
  * Usage:
  *   cassandra-schema-designer create --queries queries.txt --output schema.cql
- *   cassandra-schema-designer analyze --schema schema.cql --queries queries.txt
- *   cassandra-schema-designer validate --schema schema.cql --queries queries.txt
+ *   cassandra-schema-designer analyze --queries queries.txt
+ *   cassandra-schema-designer validate --queries queries.txt
+ *   cassandra-schema-designer migrate --from old-schema.cql --to new-schema.cql
+ *   cassandra-schema-designer interactive
  */
 public class SchemaDesignerTool
 {
     private final QueryAnalyzer queryAnalyzer;
     private final SchemaGenerator schemaGenerator;
     private final SchemaAnalyzer schemaAnalyzer;
+    private final MigrationPlanner migrationPlanner;
 
     public SchemaDesignerTool()
     {
         this.queryAnalyzer = new QueryAnalyzer();
         this.schemaGenerator = new SchemaGenerator();
         this.schemaAnalyzer = new SchemaAnalyzer();
+        this.migrationPlanner = new MigrationPlanner();
     }
 
     public static void main(String[] args)
@@ -74,6 +80,12 @@ public class SchemaDesignerTool
                     break;
                 case "validate":
                     tool.handleValidate(args);
+                    break;
+                case "migrate":
+                    tool.handleMigrate(args);
+                    break;
+                case "interactive":
+                    tool.handleInteractive(args);
                     break;
                 case "help":
                 case "--help":
@@ -241,6 +253,112 @@ public class SchemaDesignerTool
         System.out.println("Total: " + queries.size());
     }
 
+    private void handleMigrate(String[] args) throws IOException
+    {
+        System.out.println("=== Cassandra Schema Designer - Migrate Mode ===\n");
+
+        String fromFile = getArgumentValue(args, "--from");
+        String toFile = getArgumentValue(args, "--to");
+        String outputFile = getArgumentValue(args, "--output", "migration-plan.txt");
+        String language = getArgumentValue(args, "--language", "cql");
+
+        if (fromFile == null || toFile == null)
+        {
+            System.err.println("Error: --from and --to arguments are required");
+            System.exit(1);
+        }
+
+        // Parse schemas (simplified - would need proper CQL parser)
+        Schema currentSchema = parseSchemaFromFile(fromFile);
+        Schema targetSchema = parseSchemaFromFile(toFile);
+
+        // Plan migration
+        System.out.println("Planning migration from " + fromFile + " to " + toFile + "...\n");
+        MigrationPlan plan = migrationPlanner.planMigration(currentSchema, targetSchema);
+
+        // Display plan
+        System.out.println(plan);
+
+        // Generate migration code
+        CodeGenerator.Language lang = parseLanguage(language);
+        String code = migrationPlanner.generateCode(plan, lang);
+
+        // Write to file
+        Files.writeString(Paths.get(outputFile), code);
+
+        System.out.println("\n✓ Migration plan generated!");
+        System.out.println("  Output: " + outputFile);
+        System.out.println("  Strategy: " + plan.getStrategy());
+        System.out.println("  Phases: " + plan.getPhases().size());
+
+        if (plan.requiresDowntime())
+        {
+            System.out.println("\n⚠ WARNING: This migration requires downtime!");
+        }
+
+        if (plan.getRisks() != null && plan.getRisks().hasHighRisks())
+        {
+            System.out.println("\n⚠ WARNING: High-risk migration detected!");
+            System.out.println("Please review the risk assessment carefully.");
+        }
+    }
+
+    private void handleInteractive(String[] args) throws IOException
+    {
+        InteractiveDesignWizard wizard = new InteractiveDesignWizard();
+        Schema schema = wizard.run();
+
+        System.out.println("\n=== Generated Schema ===");
+        System.out.println(schema.toCQL());
+    }
+
+    private Schema parseSchemaFromFile(String filename) throws IOException
+    {
+        // Simplified schema parsing - a real implementation would use a proper CQL parser
+        // For now, create a minimal schema as a placeholder
+        Schema schema = new Schema("parsed_keyspace");
+
+        String content = Files.readString(Paths.get(filename));
+
+        // Very basic table detection
+        String[] lines = content.split("\n");
+        for (String line : lines)
+        {
+            if (line.trim().toUpperCase().startsWith("CREATE TABLE"))
+            {
+                // Extract table name (simplified)
+                String[] parts = line.split("\\s+");
+                for (int i = 0; i < parts.length - 1; i++)
+                {
+                    if (parts[i].equalsIgnoreCase("TABLE"))
+                    {
+                        String tableName = parts[i + 1].replaceAll("[^a-zA-Z0-9_.]", "");
+                        if (tableName.contains("."))
+                        {
+                            tableName = tableName.split("\\.")[1];
+                        }
+                        schema.addTable(new Table(tableName));
+                        break;
+                    }
+                }
+            }
+        }
+
+        return schema;
+    }
+
+    private CodeGenerator.Language parseLanguage(String lang)
+    {
+        switch (lang.toLowerCase())
+        {
+            case "java": return CodeGenerator.Language.JAVA;
+            case "python": return CodeGenerator.Language.PYTHON;
+            case "bash": return CodeGenerator.Language.BASH;
+            case "cql":
+            default: return CodeGenerator.Language.CQL_SCRIPT;
+        }
+    }
+
     private List<String> readQueriesFromFile(String filename) throws IOException
     {
         Path path = Paths.get(filename);
@@ -294,10 +412,12 @@ public class SchemaDesignerTool
         System.out.println("  cassandra-schema-designer <command> [options]");
         System.out.println();
         System.out.println("Commands:");
-        System.out.println("  create    Generate schema from query patterns");
-        System.out.println("  analyze   Analyze queries and detect anti-patterns");
-        System.out.println("  validate  Validate queries against best practices");
-        System.out.println("  help      Show this help message");
+        System.out.println("  create       Generate schema from query patterns");
+        System.out.println("  analyze      Analyze queries and detect anti-patterns");
+        System.out.println("  validate     Validate queries against best practices");
+        System.out.println("  migrate      Plan schema migration");
+        System.out.println("  interactive  Launch interactive design wizard");
+        System.out.println("  help         Show this help message");
         System.out.println();
         System.out.println("Create options:");
         System.out.println("  --queries <file>    File containing CQL queries (required)");
@@ -309,9 +429,20 @@ public class SchemaDesignerTool
         System.out.println("Validate options:");
         System.out.println("  --queries <file>    File containing CQL queries (required)");
         System.out.println();
+        System.out.println("Migrate options:");
+        System.out.println("  --from <file>       Current schema file (required)");
+        System.out.println("  --to <file>         Target schema file (required)");
+        System.out.println("  --output <file>     Output migration plan (default: migration-plan.txt)");
+        System.out.println("  --language <lang>   Output language: cql, java, python, bash (default: cql)");
+        System.out.println();
+        System.out.println("Interactive options:");
+        System.out.println("  (No options - wizard will guide you)");
+        System.out.println();
         System.out.println("Examples:");
         System.out.println("  cassandra-schema-designer create --queries app-queries.txt --output schema.cql");
         System.out.println("  cassandra-schema-designer analyze --queries app-queries.txt");
         System.out.println("  cassandra-schema-designer validate --queries app-queries.txt");
+        System.out.println("  cassandra-schema-designer migrate --from old.cql --to new.cql --language java");
+        System.out.println("  cassandra-schema-designer interactive");
     }
 }
