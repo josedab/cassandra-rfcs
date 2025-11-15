@@ -237,6 +237,22 @@ K_SELECT_MASKED: S E L E C T '_' M A S K E D;
 K_VECTOR:      V E C T O R;
 K_ANN:         A N N;
 
+// RFC-0008: Enhanced CQL Features - Window Functions, CTEs, Recursive Queries
+K_OVER:        O V E R;
+K_WINDOW:      W I N D O W;
+K_ROWS:        R O W S;
+K_RANGE:       R A N G E;
+K_PRECEDING:   P R E C E D I N G;
+K_FOLLOWING:   F O L L O W I N G;
+K_UNBOUNDED:   U N B O U N D E D;
+K_CURRENT:     C U R R E N T;
+K_ROW:         R O W;
+K_RECURSIVE:   R E C U R S I V E;
+K_UNION:       U N I O N;
+K_ALL:         A L L;
+K_FILTER:      F I L T E R;
+K_WITHIN:      W I T H I N;
+
 // Case-insensitive alpha characters
 fragment A: ('a'|'A');
 fragment B: ('b'|'B');
