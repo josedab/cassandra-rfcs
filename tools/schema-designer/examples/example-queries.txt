@@ -1,0 +1,18 @@
+# Example queries for Cassandra Schema Designer
+# This file demonstrates various query patterns for an e-commerce application
+
+# User queries
+SELECT * FROM users WHERE user_id = ?;
+SELECT email, name FROM users WHERE user_id = ?;
+
+# Order queries - time-series pattern
+SELECT * FROM orders WHERE user_id = ? AND order_time > ? ORDER BY order_time DESC;
+SELECT order_id, total_amount, status FROM orders WHERE user_id = ? AND order_time >= ? AND order_time <= ?;
+
+# Product catalog queries
+SELECT * FROM products WHERE product_id = ?;
+SELECT name, price, description FROM products WHERE category = ? ALLOW FILTERING;
+
+# Shopping cart queries
+SELECT * FROM cart_items WHERE user_id = ?;
+SELECT product_id, quantity FROM cart_items WHERE user_id = ? AND added_at > ?;

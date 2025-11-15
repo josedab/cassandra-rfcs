@@ -1,0 +1,59 @@
+# Cassandra Schema Designer Configuration
+# ========================================
+
+designer:
+  # Knowledge base configuration
+  knowledge_base:
+    rules_path: /etc/cassandra/designer/rules
+    patterns_path: /etc/cassandra/designer/patterns
+    update_url: https://cassandra.apache.org/designer/updates
+
+  # Analysis settings
+  analysis:
+    max_partition_size_mb: 100
+    max_collection_size: 1000
+    hot_partition_threshold: 0.1  # 10% of traffic
+    sample_size: 10000
+
+  # Migration settings
+  migration:
+    dual_write_enabled: true
+    validation_sample_rate: 0.01
+    rollback_window_hours: 24
+
+  # Performance estimation
+  performance:
+    simulation_iterations: 1000
+    confidence_level: 0.95
+
+# Default workload profile
+workload:
+  expected_qps: 1000
+  peak_qps: 5000
+  data_pattern: random  # time_series, random, sequential
+  retention_days: 90
+  query_distribution:
+    read_percent: 70
+    write_percent: 25
+    delete_percent: 5
+
+# Replication configuration
+replication:
+  default_strategy: NetworkTopologyStrategy
+  default_rf: 3
+  datacenters:
+    - name: dc1
+      replication_factor: 3
+
+# Compaction strategy recommendations
+compaction:
+  time_series: TimeWindowCompactionStrategy
+  read_heavy: LeveledCompactionStrategy
+  balanced: UnifiedCompactionStrategy
+  write_heavy: UnifiedCompactionStrategy
+
+# Table options defaults
+table_options:
+  compression: LZ4
+  bloom_filter_fp_chance: 0.01
+  caching: KEYS_ONLY
